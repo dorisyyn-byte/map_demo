@@ -1,0 +1,1446 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>我的大学记忆地图</title>
+  <style>
+    :root {
+      --bg: #ffffff;
+      --text: #222222;
+      --sub-text: #666666;
+      --primary: #ff6b81;
+      --card-bg: rgba(255, 255, 255, 0.96);
+      --shadow: 0 -8px 24px rgba(0, 0, 0, 0.08);
+      --radius: 18px;
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB",
+        "Microsoft YaHei", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding-bottom: 180px; /* 给底部卡片和 Tab 栏留空间 */
+    }
+
+    .page {
+      width: 100%;
+      max-width: 768px;
+      margin: 0 auto;
+      background: #fff;
+    }
+
+    .header {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(8px);
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      padding: 14px 16px;
+      border-bottom: 1px solid #f4f4f4;
+    }
+
+    .title {
+      margin: 0;
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+    }
+
+    .map-wrap {
+      position: relative;
+      width: 100%;
+      margin-top: 8px;
+      line-height: 0;
+    }
+
+    .page-panel {
+      display: none;
+      min-height: calc(100vh - 140px);
+      opacity: 0;
+      transform: translateY(8px);
+    }
+
+    .page-panel.is-visible {
+      display: block;
+    }
+
+    .page-panel.is-visible,
+    .page-panel.is-leaving {
+      transition: opacity 0.2s ease, transform 0.2s ease;
+    }
+
+    .page-panel.active {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .placeholder-page {
+      padding: 28px 18px;
+      color: #444;
+      font-size: 15px;
+      line-height: 1.8;
+    }
+
+    .collab-bar {
+      margin: 12px 12px 0;
+      padding: 10px 12px;
+      border-radius: 14px;
+      background: #fff4f7;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      color: #d94f67;
+      font-size: 14px;
+      font-weight: 600;
+      line-height: 1.4;
+    }
+
+    .collab-info {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+    }
+
+    .avatar-group {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 20px;
+      line-height: 1;
+    }
+
+    .collab-btn {
+      border: none;
+      background: #ffe3ea;
+      color: var(--primary);
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+      padding: 8px 12px;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+
+    .map-img {
+      width: 100%;
+      height: auto;
+      display: block;
+      object-fit: cover;
+      user-select: none;
+      -webkit-user-drag: none;
+      cursor: pointer;
+    }
+
+    .hotspot {
+      position: absolute;
+      z-index: 5;
+      background: rgba(255, 107, 129, 0.06);
+      border: 1px dashed rgba(255, 107, 129, 0.3);
+      border-radius: 12px;
+      cursor: pointer;
+    }
+
+    .hotspot:active {
+      background: rgba(255, 107, 129, 0.14);
+      transform: scale(0.98);
+    }
+
+    /* 下面三组百分比你可以继续微调 */
+    .spot-red-building {
+      left: 15%;
+      top: 76%;
+      width: 40%;
+      height: 12%;
+    }
+
+    .spot-zibei-pavilion {
+      left: 30%;
+      top: 37%;
+      width: 20%;
+      height: 16%;
+    }
+
+    .spot-yuelu-academy {
+      left: 79%;
+      top: 26%;
+      width: 20%;
+      height: 16%;
+    }
+
+    .mask {
+      position: fixed;
+      inset: 0;
+      z-index: 25;
+      background: rgba(255, 255, 255, 0.62);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s ease;
+      will-change: opacity;
+    }
+
+    .mask.show {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .info-card {
+      position: fixed;
+      left: 12px;
+      right: 12px;
+      bottom: 12px;
+      z-index: 30;
+      background: var(--card-bg);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 14px 14px 16px;
+      transform: translateY(100%);
+      opacity: 0;
+      pointer-events: none;
+      transition: transform 0.3s cubic-bezier(0.2, 0.9, 0.4, 1), opacity 0.3s ease;
+      max-width: 744px;
+      margin: 0 auto;
+      will-change: transform, opacity;
+    }
+
+    .info-card.show {
+      transform: translateY(-15%);
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .info-card.closing {
+      transform: translateY(100%);
+      opacity: 0;
+      transition: transform 0.25s ease, opacity 0.25s ease;
+    }
+
+    .card-section {
+      display: none;
+    }
+
+    .card-section.show {
+      display: block;
+    }
+
+    .card-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .card-title {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 700;
+      color: #1f1f1f;
+      margin-right: auto;
+    }
+
+    .close-btn {
+      border: none;
+      background: #ffe8ed;
+      color: #d94f67;
+      width: 30px;
+      height: 30px;
+      border-radius: 999px;
+      font-size: 16px;
+      line-height: 1;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+
+    .edit-btn {
+      border: none;
+      background: #ffe8ed;
+      color: #d94f67;
+      height: 30px;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 700;
+      padding: 0 12px;
+      cursor: pointer;
+      display: none;
+    }
+
+    .edit-btn.show {
+      display: inline-flex;
+      align-items: center;
+    }
+
+    .card-desc {
+      margin: 8px 0 14px;
+      font-size: 14px;
+      line-height: 1.6;
+      color: var(--sub-text);
+      white-space: pre-wrap;
+    }
+
+    .upload-btn {
+      border: none;
+      background: linear-gradient(135deg, #ff8fa3, #ff6b81);
+      color: #fff;
+      font-size: 14px;
+      font-weight: 600;
+      padding: 10px 14px;
+      border-radius: 12px;
+      cursor: pointer;
+      width: 100%;
+    }
+
+    .ghost-btn {
+      margin-top: 10px;
+      border: 1px solid #ececec;
+      background: #fff;
+      color: #666;
+      font-size: 14px;
+      font-weight: 600;
+      padding: 10px 14px;
+      border-radius: 12px;
+      cursor: pointer;
+      width: 100%;
+    }
+
+    .pin-action-row {
+      display: flex;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .pin-action-row .upload-btn,
+    .pin-action-row .ghost-btn {
+      margin-top: 0;
+      width: 33.333%;
+      padding: 9px 10px;
+      font-size: 13px;
+      border-radius: 10px;
+    }
+
+    .pin-view-desc {
+      margin: 8px 0 0;
+      font-size: 14px;
+      line-height: 1.6;
+      color: var(--sub-text);
+      white-space: pre-wrap;
+    }
+
+    .card-input {
+      width: 100%;
+      border: 1px solid #ececec;
+      border-radius: 12px;
+      padding: 10px 12px;
+      font-size: 14px;
+      margin-top: 10px;
+      outline: none;
+      color: #333;
+      background: #fff;
+    }
+
+    .card-input:focus {
+      border-color: #ff9fb0;
+      box-shadow: 0 0 0 3px rgba(255, 107, 129, 0.1);
+    }
+
+    .marker-layer {
+      position: absolute;
+      inset: 0;
+      z-index: 6;
+      pointer-events: none;
+    }
+
+    .marker-layer.public-layer {
+      z-index: 4;
+    }
+
+    .memory-pin {
+      position: absolute;
+      transform: translate(-50%, -100%);
+      border: none;
+      background: transparent;
+      font-size: 48px;
+      line-height: 1;
+      cursor: pointer;
+      pointer-events: auto;
+      padding: 0;
+    }
+
+    .memory-pin.pin-enter {
+      transform: translate(-50%, -100%) scale(0);
+      animation: pin-pop 0.34s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+    }
+
+    .memory-pin.dragging {
+      transform: translate(-50%, -100%) scale(1.15);
+      filter: drop-shadow(0 3px 8px rgba(255, 107, 129, 0.28));
+    }
+
+    .public-pin {
+      position: absolute;
+      transform: translate(-50%, -100%);
+      border: none;
+      background: transparent;
+      font-size: 38px;
+      line-height: 1;
+      cursor: pointer;
+      pointer-events: auto;
+      padding: 0;
+    }
+
+    .public-pin.pin-enter {
+      transform: translate(-50%, -100%) scale(0);
+      animation: pin-pop 0.34s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+    }
+
+    .action-btn {
+      margin-top: 10px;
+      border: 1px solid #ececec;
+      background: #fff;
+      color: #444;
+      font-size: 14px;
+      font-weight: 600;
+      border-radius: 12px;
+      padding: 10px 12px;
+      width: 100%;
+      cursor: pointer;
+    }
+
+    .checklist-page {
+      padding: 14px 14px 22px;
+    }
+
+    .checklist-title {
+      margin: 2px 0 10px;
+      font-size: 21px;
+      line-height: 1.35;
+      color: #222;
+    }
+
+    .checklist-meta {
+      color: #666;
+      font-size: 14px;
+      margin-bottom: 10px;
+    }
+
+    .progress-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 13px;
+      color: #5f6b5f;
+      margin-bottom: 8px;
+    }
+
+    .progress-track {
+      width: 100%;
+      height: 10px;
+      border-radius: 999px;
+      background: #e8f2e8;
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      height: 100%;
+      width: 0;
+      background: linear-gradient(90deg, #8fd58f, #74c874);
+      transition: width 0.3s ease;
+    }
+
+    .checklist-list {
+      margin-top: 14px;
+      border-top: 1px solid #f0f0f0;
+      border-bottom: 1px solid #f0f0f0;
+      background: #fff;
+    }
+
+    .checklist-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 2px;
+      border-bottom: 1px solid #f2f2f2;
+    }
+
+    .checklist-item:last-child {
+      border-bottom: none;
+    }
+
+    .check-input {
+      width: 18px;
+      height: 18px;
+      accent-color: #64b764;
+      flex-shrink: 0;
+    }
+
+    .check-input.tick-pop {
+      animation: check-pop 0.2s ease;
+    }
+
+    .check-text {
+      flex: 1;
+      font-size: 14px;
+      color: #333;
+      line-height: 1.5;
+      transition: color 0.2s ease;
+    }
+
+    .check-text.done {
+      color: #9a9a9a;
+      text-decoration: line-through;
+    }
+
+    .check-owner {
+      min-width: 54px;
+      text-align: right;
+      font-size: 18px;
+      line-height: 1;
+    }
+
+    .add-check-btn {
+      margin-top: 14px;
+      width: 100%;
+      border: 1px dashed #f2bcc9;
+      background: #fff6f9;
+      color: #d15a76;
+      border-radius: 12px;
+      padding: 11px 12px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .tab-bar {
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 40;
+      background: #fff;
+      border-top: 1px solid #f1f1f1;
+      box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.04);
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
+    }
+
+    .tab-item {
+      border: none;
+      background: transparent;
+      color: #9a9a9a;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 2px;
+      padding: 6px 4px;
+      cursor: pointer;
+      border-radius: 10px;
+    }
+
+    .tab-item.active {
+      color: var(--primary);
+      font-weight: 600;
+    }
+
+    .tab-icon {
+      font-size: 19px;
+      line-height: 1;
+    }
+
+    .tab-label {
+      font-size: 12px;
+      line-height: 1.3;
+    }
+
+    .guide-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 120;
+      background: rgba(255, 255, 255, 0.76);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+
+    .guide-overlay.show {
+      display: flex;
+    }
+
+    .guide-card {
+      width: min(100%, 520px);
+      background: #fff;
+      border-radius: 24px;
+      box-shadow: 0 16px 36px rgba(0, 0, 0, 0.12);
+      padding: 20px 18px 18px;
+      transform: scale(0.8);
+      opacity: 0;
+    }
+
+    .guide-overlay.show .guide-card {
+      animation: guide-pop 0.36s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+    }
+
+    .guide-title {
+      margin: 0;
+      font-size: 22px;
+      color: #222;
+      line-height: 1.35;
+      text-align: center;
+    }
+
+    .guide-subtitle {
+      margin: 8px 0 12px;
+      font-size: 14px;
+      color: #666;
+      line-height: 1.6;
+      text-align: center;
+    }
+
+    .guide-list {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .guide-list li {
+      font-size: 14px;
+      color: #3b3b3b;
+      line-height: 1.7;
+      margin-bottom: 6px;
+    }
+
+    .guide-note {
+      margin: 8px 0 0;
+      font-size: 13px;
+      color: #6a6a6a;
+      line-height: 1.6;
+    }
+
+    .guide-start-btn {
+      margin-top: 14px;
+      width: 100%;
+      border: none;
+      border-radius: 12px;
+      background: linear-gradient(135deg, #8fd58f, #66bf66);
+      color: #fff;
+      font-size: 15px;
+      font-weight: 700;
+      padding: 11px 12px;
+      cursor: pointer;
+    }
+
+    @media (min-width: 768px) {
+      .header {
+        padding: 16px 20px;
+      }
+
+      .title {
+        font-size: 24px;
+      }
+
+      .info-card {
+        left: 50%;
+        right: auto;
+        width: min(680px, calc(100% - 24px));
+        transform: translate(-50%, 100%);
+      }
+
+      .info-card.show {
+        transform: translate(-50%, -15%);
+      }
+
+      .info-card.closing {
+        transform: translate(-50%, 100%);
+      }
+    }
+
+    @keyframes pin-pop {
+      0% {
+        transform: translate(-50%, -100%) scale(0);
+      }
+      100% {
+        transform: translate(-50%, -100%) scale(1);
+      }
+    }
+
+    @keyframes check-pop {
+      0% {
+        transform: scale(1);
+      }
+      50% {
+        transform: scale(1.2);
+      }
+      100% {
+        transform: scale(1);
+      }
+    }
+
+    @keyframes guide-pop {
+      0% {
+        transform: scale(0.8);
+        opacity: 0;
+      }
+      100% {
+        transform: scale(1);
+        opacity: 1;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header class="header">
+      <h1 class="title">🎓 我的大学记忆地图</h1>
+    </header>
+
+    <main>
+      <section class="page-panel is-visible active" data-page="public">
+        <section class="map-wrap" id="publicMapWrap">
+          <img src="map.png" alt="大学记忆地图" class="map-img" id="mapImage" />
+          <div
+            class="hotspot spot-red-building"
+            data-name="红楼"
+            data-desc="第一次来到这里的时候是刚开学自己瞎逛时遇到的，其后我无数次经过这里，或是上课，或是上岳麓山，或是向朋友介绍……没想到现在是最后一次了。"
+            title="红楼"
+          ></div>
+          <div
+            class="hotspot spot-zibei-pavilion"
+            data-name="爱碗亭"
+            data-desc="上爬山课时一定会经过的地方。"
+            title="爱晚亭"
+          ></div>
+          <div
+            class="hotspot spot-yuelu-academy"
+            data-name="图书馆"
+            data-desc="大学四年只来过两次哈哈哈。"
+            title="图书馆"
+          ></div>
+          <div class="marker-layer public-layer" id="publicMarkerLayer"></div>
+        </section>
+      </section>
+
+      <section class="page-panel" data-page="mine">
+        <section class="collab-bar">
+          <div class="collab-info">
+            <div class="avatar-group" aria-hidden="true">🧑‍🎓 👩‍🎓 👨‍🎓</div>
+            <div>小羊、月月、春春正在共创</div>
+          </div>
+          <button class="collab-btn" id="addCollabBtn">添加共创</button>
+        </section>
+        <section class="map-wrap" id="mineMapWrap">
+          <img src="map.png" alt="我的校园地图" class="map-img" id="mineMapImage" />
+          <div class="marker-layer" id="markerLayer"></div>
+        </section>
+      </section>
+
+      <section class="page-panel" data-page="checklist">
+        <section class="checklist-page">
+          <h2 class="checklist-title">🎓 毕业前要一起做的 20 件小事</h2>
+          <div class="checklist-meta">小羊、月月、春春 正在共同填写</div>
+          <div class="progress-head">
+            <span id="progressText">已完成 0/6 项</span>
+            <span id="progressPercent">0%</span>
+          </div>
+          <div class="progress-track">
+            <div class="progress-fill" id="progressFill"></div>
+          </div>
+
+          <div class="checklist-list" id="checklistList"></div>
+          <button class="add-check-btn" id="addChecklistBtn">➕ 添加新事项</button>
+        </section>
+      </section>
+    </main>
+  </div>
+
+  <div class="mask" id="mask" aria-hidden="true"></div>
+
+  <section class="info-card" id="infoCard" aria-live="polite">
+    <div class="card-top">
+      <h3 class="card-title" id="placeName">新记忆点</h3>
+      <button class="edit-btn" id="editBtn" aria-label="编辑图钉内容">编辑</button>
+      <button class="close-btn" id="closeBtn" aria-label="关闭卡片">✕</button>
+    </div>
+    <div class="card-section show" id="publicCardSection">
+      <p class="card-desc" id="placeDesc">在这里留下了足迹…</p>
+    </div>
+    <div class="card-section" id="pinEditorSection">
+      <input class="card-input" id="pinNameInput" type="text" placeholder="地点名称（如：老地方）" />
+      <input class="card-input" id="pinDescInput" type="text" placeholder="写下你的感想…" />
+      <div class="pin-action-row">
+        <button class="upload-btn" id="pinUploadBtn">上传照片</button>
+        <button class="upload-btn" id="savePinBtn">保存记忆</button>
+        <button class="ghost-btn" id="deletePinBtn">删除图钉</button>
+      </div>
+    </div>
+    <div class="card-section" id="pinViewSection">
+      <p class="pin-view-desc" id="pinViewDesc"></p>
+    </div>
+    <div class="card-section" id="collabSection">
+      <button class="action-btn" id="copyLinkBtn">复制链接</button>
+      <button class="action-btn" id="posterBtn">生成海报</button>
+      <button class="action-btn" id="shareAppBtn">分享到其他应用</button>
+    </div>
+  </section>
+
+  <nav class="tab-bar" aria-label="底部导航">
+    <button class="tab-item active" data-tab="public" aria-current="page">
+      <span class="tab-icon">🗺️</span>
+      <span class="tab-label">公共地图</span>
+    </button>
+    <button class="tab-item" data-tab="mine">
+      <span class="tab-icon">📍</span>
+      <span class="tab-label">我的地图</span>
+    </button>
+    <button class="tab-item" data-tab="checklist">
+      <span class="tab-icon">📋</span>
+      <span class="tab-label">毕业清单</span>
+    </button>
+  </nav>
+
+  <div class="guide-overlay" id="guideOverlay" aria-hidden="true">
+    <section class="guide-card" role="dialog" aria-modal="true" aria-label="使用说明">
+      <h2 class="guide-title">🎓 欢迎来到我的记忆地图</h2>
+      <p class="guide-subtitle">和好友一起，把青春钉在地图上</p>
+      <ul class="guide-list">
+        <li>🗺️ 公共地图 — 看看大家的校园故事</li>
+        <li>📍 我的地图 — 邀请好友共创私密记忆</li>
+        <li>📋 毕业清单 — 一起勾选毕业小事</li>
+      </ul>
+      <p class="guide-note">点击地图任意位置可创建图钉，图钉可进行拖拽、编辑；点击建筑图标可以查看别人的留言。</p>
+      <button class="guide-start-btn" id="guideStartBtn">开始探索</button>
+    </section>
+  </div>
+
+  <script>
+    const mapImage = document.getElementById("mapImage");
+    const publicMapWrap = document.getElementById("publicMapWrap");
+    const publicMarkerLayer = document.getElementById("publicMarkerLayer");
+    const hotspots = document.querySelectorAll(".hotspot");
+    const mineMapWrap = document.getElementById("mineMapWrap");
+    const mineMapImage = document.getElementById("mineMapImage");
+    const markerLayer = document.getElementById("markerLayer");
+    const addCollabBtn = document.getElementById("addCollabBtn");
+    const mask = document.getElementById("mask");
+    const infoCard = document.getElementById("infoCard");
+    const placeName = document.getElementById("placeName");
+    const placeDesc = document.getElementById("placeDesc");
+    const publicCardSection = document.getElementById("publicCardSection");
+    const pinEditorSection = document.getElementById("pinEditorSection");
+    const pinViewSection = document.getElementById("pinViewSection");
+    const pinNameInput = document.getElementById("pinNameInput");
+    const pinDescInput = document.getElementById("pinDescInput");
+    const pinViewDesc = document.getElementById("pinViewDesc");
+    const pinUploadBtn = document.getElementById("pinUploadBtn");
+    const savePinBtn = document.getElementById("savePinBtn");
+    const deletePinBtn = document.getElementById("deletePinBtn");
+    const collabSection = document.getElementById("collabSection");
+    const copyLinkBtn = document.getElementById("copyLinkBtn");
+    const posterBtn = document.getElementById("posterBtn");
+    const shareAppBtn = document.getElementById("shareAppBtn");
+    const editBtn = document.getElementById("editBtn");
+    const closeBtn = document.getElementById("closeBtn");
+    const tabItems = document.querySelectorAll(".tab-item");
+    const pagePanels = document.querySelectorAll(".page-panel");
+    const guideOverlay = document.getElementById("guideOverlay");
+    const guideStartBtn = document.getElementById("guideStartBtn");
+    const checklistList = document.getElementById("checklistList");
+    const progressText = document.getElementById("progressText");
+    const progressPercent = document.getElementById("progressPercent");
+    const progressFill = document.getElementById("progressFill");
+    const addChecklistBtn = document.getElementById("addChecklistBtn");
+    const CARD_TEXT = {
+      name: "新记忆点",
+      desc: "在这里留下了足迹…",
+    };
+    const hideDuration = 220;
+    const tabFadeDuration = 200;
+    const CARD_MODE = {
+      PUBLIC: "public",
+      PIN_EDITOR: "pin-editor",
+      PIN_VIEW: "pin-view",
+      COLLAB: "collab",
+    };
+    let reopenTimer = null;
+    let panelFadeTimer = null;
+    let currentTab = "public";
+    let currentCardMode = CARD_MODE.PUBLIC;
+    let pendingMemoryPosition = null;
+    let activeMemoryId = null;
+    let activePublicPinId = null;
+    let currentPinContext = null;
+    let suppressPinClickUntil = 0;
+    let suppressPublicPinClickUntil = 0;
+    let suppressPublicMapClickUntil = 0;
+    let dragState = null;
+    let publicDragState = null;
+    const memories = [];
+    const publicPins = [];
+    const checklistItems = [
+      {
+        id: 1,
+        text: "在岳麓书院门口拍一张合影",
+        done: true,
+        owners: "🧑‍🎓 👨‍🎓",
+      },
+      {
+        id: 2,
+        text: "再吃一次大碗先生",
+        done: true,
+        owners: "👩‍🎓",
+      },
+      {
+        id: 3,
+        text: "去麓山南路拍毕业照",
+        done: false,
+        owners: "",
+      },
+      {
+        id: 4,
+        text: "去北楼拍一次vlog",
+        done: false,
+        owners: "",
+      },
+      {
+        id: 5,
+        text: "和室友在红楼前跳一次",
+        done: false,
+        owners: "",
+      },
+      {
+        id: 6,
+        text: "买一束花送给最喜欢的老师",
+        done: false,
+        owners: "",
+      },
+    ];
+    let publicPinIdSeed = 1;
+    let memoryIdSeed = 1;
+
+    function hideCard() {
+      clearTimeout(reopenTimer);
+      infoCard.classList.add("closing");
+      infoCard.classList.remove("show");
+      mask.classList.remove("show");
+      setTimeout(() => {
+        infoCard.classList.remove("closing");
+      }, 260);
+    }
+
+    function setCardMode(mode) {
+      currentCardMode = mode;
+      publicCardSection.classList.toggle("show", mode === CARD_MODE.PUBLIC);
+      pinEditorSection.classList.toggle("show", mode === CARD_MODE.PIN_EDITOR);
+      pinViewSection.classList.toggle("show", mode === CARD_MODE.PIN_VIEW);
+      collabSection.classList.toggle("show", mode === CARD_MODE.COLLAB);
+      editBtn.classList.toggle("show", mode === CARD_MODE.PIN_VIEW && !!currentPinContext && !currentPinContext.isNew);
+    }
+
+    function togglePinDeleteButton(visible) {
+      deletePinBtn.style.display = visible ? "block" : "none";
+    }
+
+    function fillCardContent(name, desc) {
+      placeName.textContent = name;
+      placeDesc.textContent = desc;
+    }
+
+    function showCardWithReset(name, desc, mode = CARD_MODE.PUBLIC) {
+      const isVisible = infoCard.classList.contains("show");
+      clearTimeout(reopenTimer);
+      hideCard();
+      setCardMode(mode);
+      fillCardContent(name, desc);
+
+      if (isVisible) {
+        reopenTimer = setTimeout(() => {
+          infoCard.classList.add("show");
+          mask.classList.add("show");
+        }, hideDuration);
+        return;
+      }
+
+      requestAnimationFrame(() => {
+        infoCard.classList.add("show");
+        mask.classList.add("show");
+      });
+    }
+
+    function switchTab(tabName) {
+      const currentPanel = document.querySelector(".page-panel.active");
+      const nextPanel = document.querySelector(`.page-panel[data-page="${tabName}"]`);
+      if (!nextPanel || currentPanel === nextPanel) return;
+      currentTab = tabName;
+
+      tabItems.forEach((tab) => {
+        const isActive = tab.dataset.tab === tabName;
+        tab.classList.toggle("active", isActive);
+        tab.setAttribute("aria-current", isActive ? "page" : "false");
+      });
+
+      clearTimeout(panelFadeTimer);
+      if (currentPanel) {
+        currentPanel.classList.remove("active");
+        currentPanel.classList.add("is-leaving");
+      }
+
+      nextPanel.classList.add("is-visible");
+      requestAnimationFrame(() => {
+        nextPanel.classList.add("active");
+      });
+
+      panelFadeTimer = setTimeout(() => {
+        pagePanels.forEach((panel) => {
+          if (panel !== nextPanel) {
+            panel.classList.remove("is-visible", "is-leaving");
+          }
+        });
+      }, tabFadeDuration);
+
+      hideCard();
+    }
+
+    function renderChecklist() {
+      checklistList.innerHTML = "";
+      checklistItems.forEach((item) => {
+        const row = document.createElement("label");
+        row.className = "checklist-item";
+
+        const checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.className = "check-input";
+        checkbox.checked = item.done;
+        checkbox.addEventListener("change", () => {
+          if (checkbox.checked) {
+            checkbox.classList.remove("tick-pop");
+            void checkbox.offsetWidth;
+            checkbox.classList.add("tick-pop");
+          }
+          item.done = checkbox.checked;
+          if (item.done && !item.owners) {
+            item.owners = "🧑‍🎓";
+          }
+          renderChecklist();
+        });
+
+        const text = document.createElement("span");
+        text.className = `check-text${item.done ? " done" : ""}`;
+        text.textContent = item.text;
+
+        const owner = document.createElement("span");
+        owner.className = "check-owner";
+        owner.textContent = item.done ? item.owners : "";
+
+        row.appendChild(checkbox);
+        row.appendChild(text);
+        row.appendChild(owner);
+        checklistList.appendChild(row);
+      });
+
+      const total = checklistItems.length;
+      const doneCount = checklistItems.filter((item) => item.done).length;
+      const percent = Math.round((doneCount / total) * 100);
+      progressText.textContent = `已完成 ${doneCount}/${total} 项`;
+      progressPercent.textContent = `${percent}%`;
+      progressFill.style.width = `${percent}%`;
+    }
+
+    function renderMemories() {
+      markerLayer.innerHTML = "";
+      memories.forEach((memory) => {
+        const pin = document.createElement("button");
+        pin.type = "button";
+        pin.className = "memory-pin";
+        if (memory.isNew) {
+          pin.classList.add("pin-enter");
+        }
+        pin.textContent = "📍";
+        pin.style.left = `${memory.x}%`;
+        pin.style.top = `${memory.y}%`;
+        pin.title = memory.name;
+        pin.addEventListener("pointerdown", (event) => {
+          if (event.pointerType === "mouse" && event.button !== 0) return;
+          const rect = mineMapImage.getBoundingClientRect();
+          const startX = event.clientX;
+          const startY = event.clientY;
+          dragState = {
+            memoryId: memory.id,
+            pin,
+            pointerId: event.pointerId,
+            mapRect: rect,
+            pressTimer: null,
+            longPressActivated: false,
+            moved: false,
+            startX,
+            startY,
+          };
+          dragState.pressTimer = setTimeout(() => {
+            if (!dragState || dragState.memoryId !== memory.id) return;
+            dragState.longPressActivated = true;
+            pin.classList.add("dragging");
+            pin.setPointerCapture(event.pointerId);
+          }, 320);
+        });
+
+        pin.addEventListener("pointermove", (event) => {
+          if (!dragState || dragState.memoryId !== memory.id || dragState.pointerId !== event.pointerId) return;
+          const moveDistance = Math.hypot(event.clientX - dragState.startX, event.clientY - dragState.startY);
+          if (moveDistance > 8) dragState.moved = true;
+
+          if (!dragState.longPressActivated) {
+            if (dragState.moved) {
+              clearTimeout(dragState.pressTimer);
+            }
+            return;
+          }
+
+          const x = ((event.clientX - dragState.mapRect.left) / dragState.mapRect.width) * 100;
+          const y = ((event.clientY - dragState.mapRect.top) / dragState.mapRect.height) * 100;
+          memory.x = Math.min(100, Math.max(0, x));
+          memory.y = Math.min(100, Math.max(0, y));
+          pin.style.left = `${memory.x}%`;
+          pin.style.top = `${memory.y}%`;
+        });
+
+        pin.addEventListener("pointerup", (event) => {
+          if (!dragState || dragState.memoryId !== memory.id || dragState.pointerId !== event.pointerId) return;
+          clearTimeout(dragState.pressTimer);
+          if (dragState.longPressActivated) {
+            suppressPinClickUntil = Date.now() + 280;
+            pin.classList.remove("dragging");
+            if (pin.hasPointerCapture(event.pointerId)) {
+              pin.releasePointerCapture(event.pointerId);
+            }
+            renderMemories();
+          }
+          dragState = null;
+        });
+
+        pin.addEventListener("pointercancel", () => {
+          if (!dragState || dragState.memoryId !== memory.id) return;
+          clearTimeout(dragState.pressTimer);
+          pin.classList.remove("dragging");
+          dragState = null;
+        });
+
+        pin.addEventListener("click", (event) => {
+          event.stopPropagation();
+          if (Date.now() < suppressPinClickUntil) return;
+          activeMemoryId = memory.id;
+          currentPinContext = { page: "mine", isNew: false, id: memory.id };
+          pinNameInput.value = memory.name || "新记忆点";
+          pinDescInput.value = memory.desc || "在这里留下了足迹…";
+          pinViewDesc.textContent = memory.desc || "在这里留下了足迹…";
+          togglePinDeleteButton(true);
+          showCardWithReset(memory.name, memory.desc || "在这里留下了足迹…", CARD_MODE.PIN_VIEW);
+        });
+        markerLayer.appendChild(pin);
+        if (memory.isNew) {
+          requestAnimationFrame(() => {
+            memory.isNew = false;
+          });
+        }
+      });
+    }
+
+    function renderPublicPins() {
+      publicMarkerLayer.innerHTML = "";
+      publicPins.forEach((pinInfo) => {
+        const pin = document.createElement("button");
+        pin.type = "button";
+        pin.className = "public-pin";
+        if (pinInfo.isNew) {
+          pin.classList.add("pin-enter");
+        }
+        pin.textContent = "📍";
+        pin.style.left = `${pinInfo.x}%`;
+        pin.style.top = `${pinInfo.y}%`;
+        pin.title = pinInfo.name;
+        pin.addEventListener("pointerdown", (event) => {
+          if (event.pointerType === "mouse" && event.button !== 0) return;
+          const rect = mapImage.getBoundingClientRect();
+          const startX = event.clientX;
+          const startY = event.clientY;
+          publicDragState = {
+            pinId: pinInfo.id,
+            pin,
+            pointerId: event.pointerId,
+            mapRect: rect,
+            pressTimer: null,
+            longPressActivated: false,
+            moved: false,
+            startX,
+            startY,
+          };
+          publicDragState.pressTimer = setTimeout(() => {
+            if (!publicDragState || publicDragState.pinId !== pinInfo.id) return;
+            publicDragState.longPressActivated = true;
+            pin.classList.add("dragging");
+            pin.setPointerCapture(event.pointerId);
+          }, 320);
+        });
+
+        pin.addEventListener("pointermove", (event) => {
+          if (!publicDragState || publicDragState.pinId !== pinInfo.id || publicDragState.pointerId !== event.pointerId) return;
+          const moveDistance = Math.hypot(event.clientX - publicDragState.startX, event.clientY - publicDragState.startY);
+          if (moveDistance > 8) publicDragState.moved = true;
+          if (!publicDragState.longPressActivated) {
+            if (publicDragState.moved) {
+              clearTimeout(publicDragState.pressTimer);
+            }
+            return;
+          }
+          const x = ((event.clientX - publicDragState.mapRect.left) / publicDragState.mapRect.width) * 100;
+          const y = ((event.clientY - publicDragState.mapRect.top) / publicDragState.mapRect.height) * 100;
+          pinInfo.x = Math.min(100, Math.max(0, x));
+          pinInfo.y = Math.min(100, Math.max(0, y));
+          pin.style.left = `${pinInfo.x}%`;
+          pin.style.top = `${pinInfo.y}%`;
+        });
+
+        pin.addEventListener("pointerup", (event) => {
+          if (!publicDragState || publicDragState.pinId !== pinInfo.id || publicDragState.pointerId !== event.pointerId) return;
+          clearTimeout(publicDragState.pressTimer);
+          if (publicDragState.longPressActivated) {
+            suppressPublicPinClickUntil = Date.now() + 280;
+            suppressPublicMapClickUntil = Date.now() + 320;
+            pin.classList.remove("dragging");
+            if (pin.hasPointerCapture(event.pointerId)) {
+              pin.releasePointerCapture(event.pointerId);
+            }
+            renderPublicPins();
+          }
+          publicDragState = null;
+        });
+
+        pin.addEventListener("pointercancel", () => {
+          if (!publicDragState || publicDragState.pinId !== pinInfo.id) return;
+          clearTimeout(publicDragState.pressTimer);
+          pin.classList.remove("dragging");
+          publicDragState = null;
+        });
+
+        pin.addEventListener("click", (event) => {
+          event.stopPropagation();
+          if (Date.now() < suppressPublicPinClickUntil) return;
+          activePublicPinId = pinInfo.id;
+          currentPinContext = { page: "public", isNew: false, id: pinInfo.id };
+          pinNameInput.value = pinInfo.name || "新记忆点";
+          pinDescInput.value = pinInfo.desc || "在这里留下了足迹…";
+          pinViewDesc.textContent = pinInfo.desc || "在这里留下了足迹…";
+          togglePinDeleteButton(true);
+          showCardWithReset(pinInfo.name, pinInfo.desc, CARD_MODE.PIN_VIEW);
+        });
+        publicMarkerLayer.appendChild(pin);
+        if (pinInfo.isNew) {
+          requestAnimationFrame(() => {
+            pinInfo.isNew = false;
+          });
+        }
+      });
+    }
+
+    function openMineCreateCard(x, y) {
+      pendingMemoryPosition = { x, y };
+      currentPinContext = { page: "mine", isNew: true, x, y };
+      pinNameInput.value = "";
+      pinDescInput.value = "";
+      togglePinDeleteButton(false);
+      showCardWithReset("新记忆点", "在这里留下了足迹…", CARD_MODE.PIN_EDITOR);
+    }
+
+    function openPublicCreateCard(x, y) {
+      currentPinContext = { page: "public", isNew: true, x, y };
+      pinNameInput.value = "";
+      pinDescInput.value = "";
+      togglePinDeleteButton(false);
+      showCardWithReset("新记忆点", "在这里留下了足迹…", CARD_MODE.PIN_EDITOR);
+    }
+
+    tabItems.forEach((tab) => {
+      tab.addEventListener("click", () => {
+        switchTab(tab.dataset.tab);
+      });
+    });
+
+    publicMapWrap.addEventListener("click", (event) => {
+      if (currentTab !== "public") return;
+      if (Date.now() < suppressPublicMapClickUntil) return;
+      if (event.target.closest(".hotspot") || event.target.closest(".public-pin")) return;
+      const rect = mapImage.getBoundingClientRect();
+      const x = ((event.clientX - rect.left) / rect.width) * 100;
+      const y = ((event.clientY - rect.top) / rect.height) * 100;
+      if (x < 0 || x > 100 || y < 0 || y > 100) return;
+      activePublicPinId = null;
+      openPublicCreateCard(x, y);
+    });
+
+    hotspots.forEach((spot) => {
+      spot.addEventListener("click", (event) => {
+        event.stopPropagation();
+        activePublicPinId = null;
+        const name = spot.dataset.name || CARD_TEXT.name;
+        const desc = spot.dataset.desc || CARD_TEXT.desc;
+        showCardWithReset(name, desc);
+      });
+    });
+
+    mineMapImage.addEventListener("click", (event) => {
+      if (currentTab !== "mine") return;
+      const rect = mineMapImage.getBoundingClientRect();
+      const x = ((event.clientX - rect.left) / rect.width) * 100;
+      const y = ((event.clientY - rect.top) / rect.height) * 100;
+      openMineCreateCard(x, y);
+    });
+
+    markerLayer.addEventListener("click", (event) => {
+      event.stopPropagation();
+    });
+
+    addCollabBtn.addEventListener("click", () => {
+      if (currentTab !== "mine") return;
+      showCardWithReset("添加共创", "邀请好友一起标记专属回忆", CARD_MODE.COLLAB);
+    });
+
+    closeBtn.addEventListener("click", hideCard);
+    mask.addEventListener("click", hideCard);
+
+    pinUploadBtn.addEventListener("click", () => {
+      alert("Demo 演示");
+    });
+
+    editBtn.addEventListener("click", () => {
+      if (!currentPinContext) return;
+      togglePinDeleteButton(!currentPinContext.isNew);
+      showCardWithReset(pinNameInput.value || "新记忆点", pinDescInput.value || "在这里留下了足迹…", CARD_MODE.PIN_EDITOR);
+    });
+
+    savePinBtn.addEventListener("click", () => {
+      if (!currentPinContext) return;
+      const name = pinNameInput.value.trim() || "新记忆点";
+      const desc = pinDescInput.value.trim() || "在这里留下了足迹…";
+
+      if (currentPinContext.page === "mine") {
+        if (currentPinContext.isNew) {
+          memories.push({
+            id: memoryIdSeed++,
+            x: currentPinContext.x,
+            y: currentPinContext.y,
+            name,
+            desc,
+            isNew: true,
+          });
+        } else {
+          const target = memories.find((memory) => memory.id === currentPinContext.id);
+          if (target) {
+            target.name = name;
+            target.desc = desc;
+          }
+        }
+        renderMemories();
+        const target = currentPinContext.isNew
+          ? memories[memories.length - 1]
+          : memories.find((memory) => memory.id === currentPinContext.id);
+        if (target) {
+          currentPinContext = { page: "mine", isNew: false, id: target.id };
+          pinViewDesc.textContent = target.desc || "在这里留下了足迹…";
+          togglePinDeleteButton(true);
+          showCardWithReset(target.name, target.desc || "在这里留下了足迹…", CARD_MODE.PIN_VIEW);
+          return;
+        }
+      } else if (currentPinContext.page === "public") {
+        if (currentPinContext.isNew) {
+          publicPins.push({
+            id: publicPinIdSeed++,
+            x: currentPinContext.x,
+            y: currentPinContext.y,
+            name,
+            desc,
+            isNew: true,
+          });
+        } else {
+          const target = publicPins.find((pinInfo) => pinInfo.id === currentPinContext.id);
+          if (target) {
+            target.name = name;
+            target.desc = desc;
+          }
+        }
+        renderPublicPins();
+        const target = currentPinContext.isNew
+          ? publicPins[publicPins.length - 1]
+          : publicPins.find((pinInfo) => pinInfo.id === currentPinContext.id);
+        if (target) {
+          currentPinContext = { page: "public", isNew: false, id: target.id };
+          pinViewDesc.textContent = target.desc || "在这里留下了足迹…";
+          togglePinDeleteButton(true);
+          showCardWithReset(target.name, target.desc || "在这里留下了足迹…", CARD_MODE.PIN_VIEW);
+          return;
+        }
+      }
+
+      currentPinContext = null;
+      pendingMemoryPosition = null;
+      togglePinDeleteButton(false);
+      hideCard();
+    });
+
+    deletePinBtn.addEventListener("click", () => {
+      if (!currentPinContext || currentPinContext.isNew) return;
+      if (currentPinContext.page === "mine") {
+        const index = memories.findIndex((memory) => memory.id === currentPinContext.id);
+        if (index >= 0) {
+          memories.splice(index, 1);
+          renderMemories();
+        }
+        activeMemoryId = null;
+      } else if (currentPinContext.page === "public") {
+        const index = publicPins.findIndex((pinInfo) => pinInfo.id === currentPinContext.id);
+        if (index >= 0) {
+          publicPins.splice(index, 1);
+          renderPublicPins();
+        }
+        activePublicPinId = null;
+      }
+      currentPinContext = null;
+      togglePinDeleteButton(false);
+      hideCard();
+    });
+
+    [copyLinkBtn, posterBtn, shareAppBtn].forEach((button) => {
+      button.addEventListener("click", () => {
+        alert("demo演示");
+      });
+    });
+
+    addChecklistBtn.addEventListener("click", () => {
+      alert("Demo 演示：添加事项");
+    });
+
+    renderChecklist();
+
+    const guideDismissed = sessionStorage.getItem("memoMapGuideDismissed") === "1";
+    if (!guideDismissed) {
+      guideOverlay.classList.add("show");
+      guideOverlay.setAttribute("aria-hidden", "false");
+    }
+
+    guideStartBtn.addEventListener("click", () => {
+      guideOverlay.classList.remove("show");
+      guideOverlay.setAttribute("aria-hidden", "true");
+      sessionStorage.setItem("memoMapGuideDismissed", "1");
+    });
+  </script>
+</body>
+</html>
